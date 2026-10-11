@@ -20,12 +20,13 @@ ADMINS = {int(x) for x in os.environ["ADMIN_IDS"].split(",")}
 
 db = sqlite3.connect(os.path.join(os.path.dirname(_env), "bot.db"))
 db.executescript("""
-CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, channel INTEGER, poster_chat INTEGER, poster_msg INTEGER, button TEXT DEFAULT 'Join channel');
+CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, channel INTEGER, poster_chat INTEGER, poster_msg INTEGER, button TEXT DEFAULT 'Kanalga qo''shilish');
 CREATE TABLE IF NOT EXISTS messages(pos INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT, chat INTEGER, msg INTEGER);
 CREATE TABLE IF NOT EXISTS users(id INTEGER, event TEXT, PRIMARY KEY(id, event));
 """)
 with suppress(sqlite3.OperationalError):  # upgrade older bot.db
     db.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
+db.execute("UPDATE events SET button='Kanalga qo''shilish' WHERE button='Join channel'"); db.commit()
 
 bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
@@ -61,11 +62,11 @@ async def send_welcome(chat_id, eid):
 
 async def send_invite(chat_id, eid, url):
     ev = event(eid)
-    markup = kb([InlineKeyboardButton(text=ev[3], url=url, style="primary")], [btn("🔄 Link not working? Get a new one", f"link:{eid}")])
+    markup = kb([InlineKeyboardButton(text=ev[3], url=url, style="primary")], [btn("🔄 Havola ishlamayaptimi? Yangisini olish", f"link:{eid}")])
     if ev[1]:
         await bot.copy_message(chat_id, ev[1], ev[2], reply_markup=markup)
     else:
-        await bot.send_message(chat_id, "🎟 Your personal invite — it works once, just for you:", reply_markup=markup)
+        await bot.send_message(chat_id, "🎟 Shaxsiy taklif havolangiz — faqat siz uchun, bir martalik:", reply_markup=markup)
 
 
 async def invite(chat_id, uid, eid):
@@ -75,13 +76,13 @@ async def invite(chat_id, uid, eid):
         return
     with suppress(Exception):
         if (await bot.get_chat_member(ch, uid)).status in ("member", "administrator", "creator"):
-            return await bot.send_message(chat_id, "✅ You're already in the channel — see you there!")
+            return await bot.send_message(chat_id, "✅ Siz allaqachon kanaldasiz — o'sha yerda ko'rishamiz!")
     try:
         url = (await bot.create_chat_invite_link(ch, member_limit=1, name=f"{eid}:{uid}"[:32])).invite_link
     except Exception as e:
         logging.error("invite link for %s failed: %s", eid, e)
-        return await bot.send_message(chat_id, "😕 Couldn't create your invite just now.",
-                                      reply_markup=kb([btn("🔄 Try again", f"link:{eid}", "primary")]))
+        return await bot.send_message(chat_id, "😕 Hozircha taklif havolasini yaratib bo'lmadi.",
+                                      reply_markup=kb([btn("🔄 Qayta urinish", f"link:{eid}", "primary")]))
     await send_invite(chat_id, eid, url)
 
 
@@ -93,7 +94,7 @@ async def start(m: Message, command: CommandObject):
         pending.pop(m.from_user.id, None)
         return await m.answer(**home())
     if not event(eid):
-        return await m.answer("👋 Hi! Open me through an event link to get your invite.")
+        return await m.answer("👋 Salom! Taklif olish uchun botni tadbir havolasi orqali oching.")
     first_time = db.execute("INSERT OR IGNORE INTO users VALUES(?,?)", (m.from_user.id, eid)).rowcount; db.commit()
     if first_time:  # returning users skip straight to their link
         await send_welcome(m.chat.id, eid)
@@ -111,8 +112,8 @@ async def relink(c: CallbackQuery):
 async def fallback(m: Message):
     row = db.execute("SELECT event FROM users WHERE id=? ORDER BY rowid DESC LIMIT 1", (m.from_user.id,)).fetchone()
     if row and event(row[0]):
-        return await m.answer("Need your invite link? 👇", reply_markup=kb([btn("🎟 Get my invite link", f"link:{row[0]}", "primary")]))
-    await m.answer("👋 Open me through an event link to get your invite.")
+        return await m.answer("Taklif havolangiz kerakmi? 👇", reply_markup=kb([btn("🎟 Taklif havolamni olish", f"link:{row[0]}", "primary")]))
+    await m.answer("👋 Taklif olish uchun botni tadbir havolasi orqali oching.")
 
 
 # ---------- admin panel ----------

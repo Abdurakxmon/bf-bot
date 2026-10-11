@@ -55,6 +55,7 @@ The event screen shows a setup checklist (*Setup: 2 of 3*). When everything is d
 ## Good to know
 
 - Welcome messages and the poster are re-sent from your chat with the bot. **Don't delete them there**, or users stop receiving them.
+- Everything subscribers see is in Uzbek; the admin panel stays in English.
 - Users who already joined the channel aren't sent a new link. Returning users skip the welcome messages and get only their invite.
 - Broadcasts send about 20 messages per second. A large audience takes a few minutes, and the bot shows progress as it goes.
 - `/cancel` stops whatever step you're in.
