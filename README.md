@@ -7,6 +7,7 @@ A Telegram bot for events. People arrive from a link on any social network, get 
 1. You create an event, for example `spring24`, and share its link: `https://t.me/YourBot?start=spring24`.
 2. A user opens the link and the bot sends your welcome messages in order: round videos, videos, photos, text or forwarded posts.
 3. Then it sends your poster with a button holding an invite link that works **once**, only for that user.
+   People who open the bot without an event link get a list of active events (ones with a linked channel, named after the channel) and pick one.
 4. Later you can broadcast a message to all users, or only to one event's users.
 
 ## Setup

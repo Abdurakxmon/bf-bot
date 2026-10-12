@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS users(id INTEGER, event TEXT, PRIMARY KEY(id, event))
 """)
 with suppress(sqlite3.OperationalError):  # upgrade older bot.db
     db.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
+with suppress(sqlite3.OperationalError):
+    db.execute("ALTER TABLE events ADD COLUMN title TEXT")  # channel title, shown in the event picker
 db.execute("UPDATE events SET button='Kanalga qo''shilish' WHERE button='Join channel'"); db.commit()
 
 bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -94,11 +96,42 @@ async def start(m: Message, command: CommandObject):
         pending.pop(m.from_user.id, None)
         return await m.answer(**home())
     if not event(eid):
-        return await m.answer("👋 Salom! Taklif olish uchun botni tadbir havolasi orqali oching.")
-    first_time = db.execute("INSERT OR IGNORE INTO users VALUES(?,?)", (m.from_user.id, eid)).rowcount; db.commit()
+        return await m.answer(**await event_menu())
+    await enter(m.chat.id, m.from_user.id, eid)
+
+
+async def enter(chat_id, uid, eid):
+    first_time = db.execute("INSERT OR IGNORE INTO users VALUES(?,?)", (uid, eid)).rowcount; db.commit()
     if first_time:  # returning users skip straight to their link
-        await send_welcome(m.chat.id, eid)
-    await invite(m.chat.id, m.from_user.id, eid)
+        await send_welcome(chat_id, eid)
+    await invite(chat_id, uid, eid)
+
+
+async def event_menu():
+    """Events a user can pick when they open the bot without an event link: only ones with a channel linked."""
+    rows = []
+    for eid, ch, title in db.execute("SELECT id, channel, title FROM events WHERE channel IS NOT NULL ORDER BY rowid").fetchall():
+        if not title:
+            with suppress(Exception):
+                title = (await bot.get_chat(ch)).title
+                db.execute("UPDATE events SET title=? WHERE id=?", (title, eid)); db.commit()
+        rows.append([btn(f"🎟 {title or eid}", f"join:{eid}")])
+    if not rows:
+        return dict(text="😔 Hozircha faol tadbirlar yo'q. Keyinroq qayta urinib ko'ring.")
+    return dict(text="👋 Salom! Qaysi tadbirda qatnashmoqchisiz? 👇", reply_markup=kb(*rows))
+
+
+@dp.callback_query(F.data.startswith("join:"))
+async def join(c: CallbackQuery):
+    await c.answer()
+    if event(eid := c.data[5:]):
+        await enter(c.message.chat.id, c.from_user.id, eid)
+
+
+@dp.callback_query(F.data == "events")
+async def events_menu(c: CallbackQuery):
+    await c.answer()
+    await c.message.answer(**await event_menu())
 
 
 @dp.callback_query(F.data.startswith("link:"))
@@ -112,8 +145,9 @@ async def relink(c: CallbackQuery):
 async def fallback(m: Message):
     row = db.execute("SELECT event FROM users WHERE id=? ORDER BY rowid DESC LIMIT 1", (m.from_user.id,)).fetchone()
     if row and event(row[0]):
-        return await m.answer("Taklif havolangiz kerakmi? 👇", reply_markup=kb([btn("🎟 Taklif havolamni olish", f"link:{row[0]}", "primary")]))
-    await m.answer("👋 Taklif olish uchun botni tadbir havolasi orqali oching.")
+        return await m.answer("Taklif havolangiz kerakmi? 👇", reply_markup=kb([btn("🎟 Taklif havolamni olish", f"link:{row[0]}", "primary")],
+                                                                                 [btn("📋 Boshqa tadbirlar", "events")]))
+    await m.answer(**await event_menu())
 
 
 # ---------- admin panel ----------
@@ -287,7 +321,7 @@ async def capture(m: Message):
             ok = False
         if not ok:
             return await m.answer("I'm not an admin there with the <b>Invite users</b> right yet. Fix that and try again.")
-        db.execute("UPDATE events SET channel=? WHERE id=?", (chat_id, eid)); db.commit()
+        db.execute("UPDATE events SET channel=?, title=NULL WHERE id=?", (chat_id, eid)); db.commit()
         await m.answer("📢 Channel linked.", reply_markup=ReplyKeyboardRemove())
 
     elif action == "bc":
